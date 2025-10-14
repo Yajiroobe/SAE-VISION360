@@ -12,17 +12,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Cloner le code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Configurer Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 3️⃣ Installer les dépendances backend
       - name: Install backend dependencies
         working-directory: backend
         run: |
@@ -33,7 +30,6 @@ jobs:
             echo "No requirements.txt found, skipping..."
           fi
 
-      # 4️⃣ Lancer les tests backend (pytest)
       - name: Run backend tests (pytest)
         working-directory: backend
         env:
@@ -45,13 +41,11 @@ jobs:
             echo "No backend tests directory found"
           fi
 
-      # 5️⃣ Configurer Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # 6️⃣ Lancer les tests frontend (npm / vitest)
       - name: Run frontend tests (npm)
         working-directory: frontend
         run: |
@@ -62,22 +56,19 @@ jobs:
             echo "No frontend package.json found, skipping..."
           fi
 
-      # 7️⃣ Créer un ZIP du projet main
       - name: Create ZIP backup
-        run: |
-          zip -r vision360-backup.zip . -x "*.git*"
+        run: zip -r vision360-backup.zip . -x "*.git*"
 
-      # 8️⃣ Installer rclone et préparer Google Drive
       - name: Install rclone
         run: |
-          curl https://rclone.org/install.sh | sudo bash
+          sudo apt update && sudo apt install -y rclone
           echo "${{ secrets.GDRIVE_CREDENTIALS }}" > sa.json
           rclone config create gdrive drive scope=drive service_account_file=sa.json
 
-      # 9️⃣ Envoyer le ZIP sur Google Drive
       - name: Upload backup to Google Drive
         env:
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           BACKUP_NAME="vision360-backup-$(date +%Y%m%d_%H%M%S).zip"
+          echo "Uploading backup: $BACKUP_NAME"
           rclone copyto vision360-backup.zip gdrive:${GDRIVE_FOLDER_ID}/$BACKUP_NAME
