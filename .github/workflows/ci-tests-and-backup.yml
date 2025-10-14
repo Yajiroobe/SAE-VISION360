@@ -1,0 +1,91 @@
+name: Tests automatiques Vision360
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  run-tests-and-backup:
+    name: Tests backend & frontend + Backup Google Drive
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Cloner le dépôt
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Python pour le backend
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          if [ -f requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          else
+            echo "No requirements.txt found, skipping..."
+          fi
+
+      - name: Run backend tests (pytest)
+        working-directory: backend
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend
+        run: |
+          if [ -d tests ]; then
+            pytest --maxfail=1 --disable-warnings -q
+          else
+            echo "No backend tests directory found"
+          fi
+
+      # 3️⃣ Node.js pour le frontend
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run frontend tests (npm)
+        working-directory: frontend
+        run: |
+          if [ -f package.json ]; then
+            npm ci || npm install
+            npm test --if-present
+          else
+            echo "No frontend package.json found, skipping..."
+          fi
+
+      # 4️⃣ Créer un ZIP du projet
+      - name: Create ZIP backup
+        run: |
+          sudo apt-get update && sudo apt-get install -y zip
+          zip -r vision360-backup.zip . -x ".git/*"
+
+      # 5️⃣ Installer et configurer rclone
+      - name: Install rclone & configure Google Drive
+        run: |
+          sudo apt-get update && sudo apt-get install -y rclone
+          echo '${{ secrets.GDRIVE_CREDENTIALS }}' > sa.json
+          rclone config create gdrive drive scope=drive service_account_file=sa.json
+
+      # 6️⃣ Upload du ZIP sur Google Drive
+      - name: Upload backup to Google Drive
+        env:
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          BACKUP_NAME="vision360-backup-$(date +%Y%m%d_%H%M%S).zip"
+          echo "Uploading backup: $BACKUP_NAME to folder ${GDRIVE_FOLDER_ID}"
+          rclone copyto vision360-backup.zip gdrive:${GDRIVE_FOLDER_ID}/$BACKUP_NAME
+
+      # (Optionnel) Vérification Drive
+      - name: List last backups (optional)
+        if: always()
+        env:
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          echo "Last files on Drive:"
+          rclone lsf gdrive:${GDRIVE_FOLDER_ID} --max-depth 1 | tail -n 5 || true
