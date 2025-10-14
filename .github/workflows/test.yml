@@ -1,0 +1,39 @@
+name: Tests automatiques Vision360
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend deps
+        run: |
+          cd backend
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run backend tests (pytest)
+        run: |
+          cd backend
+          if [ -d tests ]; then pytest --maxfail=1 -q; else echo "No backend tests"; fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run frontend tests (npm)
+        run: |
+          cd frontend
+          if [ -f package.json ]; then npm install && npm test --if-present; else echo "No frontend"; fi

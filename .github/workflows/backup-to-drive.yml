@@ -1,0 +1,46 @@
+name: Backup main to Google Drive
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  backup-to-drive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare backup meta
+        id: meta
+        run: |
+          BEFORE_SHA="${{ github.event.before }}"
+          SHORT=$(echo "$BEFORE_SHA" | cut -c1-8)
+          DATE=$(date -u +"%Y%m%d-%H%M%S")
+          ZIP_NAME="backup-main-${DATE}-${SHORT}.zip"
+          echo "zip_name=$ZIP_NAME" >> $GITHUB_OUTPUT
+          echo "before_sha=$BEFORE_SHA" >> $GITHUB_OUTPUT
+
+      - name: Checkout previous commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.before_sha }}
+          path: prev
+          fetch-depth: 0
+
+      - name: Create ZIP of previous main
+        run: |
+          cd prev
+          zip -r "../${{ steps.meta.outputs.zip_name }}" .
+
+      - name: Upload ZIP to Google Drive
+        uses: garygrossgarten/github-action-upload-to-google-drive@v2.0.0
+        with:
+          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
+          folderId: ${{ secrets.GDRIVE_FOLDER_ID }}
+          file: ${{ steps.meta.outputs.zip_name }}
