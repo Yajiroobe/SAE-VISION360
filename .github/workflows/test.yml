@@ -67,18 +67,17 @@ jobs:
         run: |
           zip -r vision360-backup.zip . -x "*.git*"
 
-      # 8️⃣ Enregistrer les identifiants Google Drive
-      - name: Save Google credentials
+      # 8️⃣ Installer rclone et préparer Google Drive
+      - name: Install rclone
         run: |
-          echo '${{ secrets.GDRIVE_CREDENTIALS }}' > /tmp/sa.json
+          curl https://rclone.org/install.sh | sudo bash
+          echo "${{ secrets.GDRIVE_CREDENTIALS }}" > sa.json
+          rclone config create gdrive drive scope=drive service_account_file=sa.json
 
-      # 9️⃣ Upload du backup vers Google Drive via rclone
-      - name: Upload main backup to Google Drive
-        if: success()
-        uses: wei/rclone-action@v1
+      # 9️⃣ Envoyer le ZIP sur Google Drive
+      - name: Upload backup to Google Drive
         env:
-          RCLONE_CONFIG_GDRIVE_TYPE: drive
-          RCLONE_CONFIG_GDRIVE_SERVICE_ACCOUNT_FILE: /tmp/sa.json
-        with:
-          args: copyto vision360-backup.zip "gdrive:${{ secrets.GDRIVE_FOLDER_ID }}/vision360-backup-$(date +%Y%m%d_%H%M%S).zip"
-        continue-on-error: true
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          BACKUP_NAME="vision360-backup-$(date +%Y%m%d_%H%M%S).zip"
+          rclone copyto vision360-backup.zip gdrive:${GDRIVE_FOLDER_ID}/$BACKUP_NAME
