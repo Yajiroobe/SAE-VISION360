@@ -8,32 +8,56 @@ on:
 
 jobs:
   run-tests:
+    name: Lancer les tests backend et frontend
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      # 1️⃣ Cloner le code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2️⃣ Configurer Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install backend deps
+      # 3️⃣ Installer les dépendances backend
+      - name: Install backend dependencies
+        working-directory: backend
         run: |
-          cd backend
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          else
+            echo "No requirements.txt found, skipping..."
+          fi
 
+      # 4️⃣ Lancer les tests backend (pytest)
       - name: Run backend tests (pytest)
+        working-directory: backend
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend
         run: |
-          cd backend
-          if [ -d tests ]; then pytest --maxfail=1 -q; else echo "No backend tests"; fi
+          if [ -d tests ]; then
+            pytest --maxfail=1 --disable-warnings -q
+          else
+            echo "No backend tests directory found"
+          fi
 
-      - name: Setup Node
+      # 5️⃣ Configurer Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
+      # 6️⃣ Lancer les tests frontend (npm / vitest)
       - name: Run frontend tests (npm)
+        working-directory: frontend
         run: |
-          cd frontend
-          if [ -f package.json ]; then npm install && npm test --if-present; else echo "No frontend"; fi
+          if [ -f package.json ]; then
+            npm ci || npm install
+            npm test --if-present
+          else
+            echo "No frontend package.json found, skipping..."
+          fi
