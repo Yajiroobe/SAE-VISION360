@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-tests:
-    name: Lancer les tests backend et frontend
+    name: Lancer les tests backend et frontend + Backup main
     runs-on: ubuntu-latest
 
     steps:
@@ -61,3 +61,24 @@ jobs:
           else
             echo "No frontend package.json found, skipping..."
           fi
+
+      # 7️⃣ Créer un ZIP du projet main
+      - name: Create ZIP backup
+        run: |
+          zip -r vision360-backup.zip . -x "*.git*"
+
+      # 8️⃣ Enregistrer les identifiants Google Drive
+      - name: Save Google credentials
+        run: |
+          echo '${{ secrets.GDRIVE_CREDENTIALS }}' > /tmp/sa.json
+
+      # 9️⃣ Upload du backup vers Google Drive via rclone
+      - name: Upload main backup to Google Drive
+        if: success()
+        uses: wei/rclone-action@v1
+        env:
+          RCLONE_CONFIG_GDRIVE_TYPE: drive
+          RCLONE_CONFIG_GDRIVE_SERVICE_ACCOUNT_FILE: /tmp/sa.json
+        with:
+          args: copyto vision360-backup.zip "gdrive:${{ secrets.GDRIVE_FOLDER_ID }}/vision360-backup-$(date +%Y%m%d_%H%M%S).zip"
+        continue-on-error: true
