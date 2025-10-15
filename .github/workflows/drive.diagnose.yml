@@ -1,0 +1,39 @@
+name: Diagnose Google Drive access
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install rclone + jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rclone jq
+
+      - name: Write service-account JSON & validate
+        run: |
+          echo '${{ secrets.GDRIVE_CREDENTIALS }}' > sa.json
+          jq -e . sa.json >/dev/null
+          echo "✅ JSON looks valid."
+
+      - name: Configure rclone (root = your folder ID)
+        env:
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          rclone config create gdrive drive scope=drive service_account_file=sa.json root_folder_id="${GDRIVE_FOLDER_ID}"
+          rclone config show gdrive
+
+      - name: List folder (should be your backup folder)
+        run: |
+          echo "Listing gdrive: (root is your folder)"
+          rclone lsd gdrive: || true
+          rclone lsf gdrive: --max-depth 1 || true
+
+      - name: Upload tiny test file
+        run: |
+          echo "hello $(date -u)" > hello.txt
+          rclone copy hello.txt gdrive: -v
+          echo "After upload:"
+          rclone lsf gdrive: --max-depth 1 | tail -n 10 || true
