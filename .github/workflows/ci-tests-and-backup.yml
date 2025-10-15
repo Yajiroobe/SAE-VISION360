@@ -12,11 +12,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Récupération du code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Python pour le backend
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -43,7 +41,6 @@ jobs:
             echo "No backend tests directory found"
           fi
 
-      # 3️⃣ Node.js pour le frontend
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -59,34 +56,35 @@ jobs:
             echo "No frontend package.json found, skipping..."
           fi
 
-      # 4️⃣ Création du ZIP de sauvegarde
       - name: Create ZIP backup
         run: |
-          sudo apt-get update && sudo apt-get install -y zip
+          sudo apt-get update && sudo apt-get install -y zip jq rclone
           zip -r vision360-backup.zip . -x ".git/*"
 
-      # 5️⃣ Installer et configurer rclone pour Google Drive
-      - name: Install rclone & configure Google Drive
+      # Écrire le secret dans un vrai fichier JSON et le valider
+      - name: Write service-account JSON & validate
         run: |
-          sudo apt-get update && sudo apt-get install -y rclone
           echo '${{ secrets.GDRIVE_CREDENTIALS }}' > sa.json
+          # Valider que c'est bien un JSON
+          jq -e . sa.json >/dev/null
+
+      - name: Configure rclone with service account
+        run: |
           rclone config create gdrive drive scope=drive service_account_file=sa.json
 
-      # 6️⃣ Upload du ZIP vers Google Drive
       - name: Upload backup to Google Drive
         env:
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           BACKUP_NAME="vision360-backup-$(date +%Y%m%d_%H%M%S).zip"
           echo "Uploading backup: $BACKUP_NAME to folder ${GDRIVE_FOLDER_ID}"
-          mv vision360-backup.zip $BACKUP_NAME
-          rclone copy $BACKUP_NAME gdrive:${GDRIVE_FOLDER_ID} --drive-server-side-across-configs
+          mv vision360-backup.zip "$BACKUP_NAME"
+          rclone copy "$BACKUP_NAME" "gdrive:${GDRIVE_FOLDER_ID}" --drive-server-side-across-configs
 
-      # 7️⃣ (Optionnel) Lister les 5 derniers backups
-      - name: List last backups
+      - name: List last backups (optional)
         if: always()
         env:
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           echo "✅ Derniers fichiers sur le Drive :"
-          rclone lsf gdrive:${GDRIVE_FOLDER_ID} --max-depth 1 | tail -n 5 || true
+          rclone lsf "gdrive:${GDRIVE_FOLDER_ID}" --max-depth 1 | tail -n 5 || true
