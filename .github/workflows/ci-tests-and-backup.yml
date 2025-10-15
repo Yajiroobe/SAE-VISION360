@@ -71,7 +71,7 @@ jobs:
         run: |
           echo '${{ secrets.GDRIVE_CREDENTIALS }}' > sa.json
           jq -e . sa.json >/dev/null
-          echo "✅ Service account JSON looks valid."
+          echo "Service account JSON looks valid."
 
       # 6) Configurer rclone avec le dossier Drive comme racine
       - name: Configure rclone (root = folder ID)
@@ -79,13 +79,12 @@ jobs:
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           rclone config create gdrive drive scope=drive service_account_file=sa.json root_folder_id="${GDRIVE_FOLDER_ID}"
-          echo "=== rclone remote config ==="
           rclone config show gdrive
 
       # 7) Diagnostic avant upload
       - name: Diagnose Drive access (pre-upload)
         run: |
-          echo "Listing root of gdrive: (should be your backup folder)"
+          echo "Listing root of gdrive (should be your backup folder):"
           rclone lsd gdrive: || true
           echo "Flat list:"
           rclone lsf gdrive: --max-depth 1 || true
@@ -95,12 +94,12 @@ jobs:
         run: |
           BACKUP_NAME="vision360-backup-$(date +%Y%m%d_%H%M%S).zip"
           mv vision360-backup.zip "$BACKUP_NAME"
-          echo "Uploading $BACKUP_NAME to gdrive: (root is your folder ID)"
+          echo "Uploading $BACKUP_NAME to gdrive:"
           rclone copy "$BACKUP_NAME" gdrive: --drive-server-side-across-configs -v
 
       # 9) Vérification après upload
       - name: List last backups (post-upload)
-          if: always()
+        if: always()
         run: |
-          echo "✅ Derniers fichiers dans gdrive:"
+          echo "Last files in gdrive:"
           rclone lsf gdrive: --max-depth 1 | tail -n 10 || true
