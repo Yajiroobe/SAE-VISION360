@@ -94,32 +94,36 @@ jobs:
 
       - name: Write service-account JSON & validate
         run: |
-          echo '${{ secrets.GDRIVE_CREDENTIALS }}' > sa.json
+          printf '%s' '${{ secrets.GDRIVE_CREDENTIALS }}' > sa.json
           jq -e . sa.json >/dev/null
           echo "Service account JSON looks valid."
 
-      - name: Configure rclone (root = folder ID)
+      - name: Configure rclone (service account)
+        run: |
+          rclone config create gdrive drive scope=drive service_account_file=sa.json
+
+      - name: Diagnose Drive access (pre-upload)
         env:
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
-          rclone config create gdrive drive scope=drive service_account_file=sa.json root_folder_id="${GDRIVE_FOLDER_ID}"
-
-      - name: Diagnose Drive access (pre-upload)
-        run: |
-          echo "Listing root of gdrive (should be your backup folder):"
-          rclone lsd gdrive: || true
-          echo "Flat list:"
-          rclone lsf gdrive: --max-depth 1 || true
+          echo "About gdrive:"
+          rclone about gdrive: || true
+          echo "Listing target folder by ID: ${GDRIVE_FOLDER_ID}"
+          rclone lsf "gdrive:${GDRIVE_FOLDER_ID}" --max-depth 1 || true
 
       - name: Upload backup to Google Drive
+        env:
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           BACKUP_NAME="vision360-backup-$(date +%Y%m%d_%H%M%S).zip"
           mv vision360-backup.zip "$BACKUP_NAME"
-          echo "Uploading $BACKUP_NAME to gdrive:"
-          rclone copy "$BACKUP_NAME" gdrive: --drive-server-side-across-configs -v
+          echo "Uploading $BACKUP_NAME to gdrive:${GDRIVE_FOLDER_ID}"
+          rclone copy "$BACKUP_NAME" "gdrive:${GDRIVE_FOLDER_ID}" -v
 
       - name: List last backups (post-upload)
         if: always()
+        env:
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
-          echo "Last files in gdrive:"
-          rclone lsf gdrive: --max-depth 1 | tail -n 10 || true
+          echo "Last files in gdrive folder:"
+          rclone lsf "gdrive:${GDRIVE_FOLDER_ID}" --max-depth 1 | tail -n 10 || true
