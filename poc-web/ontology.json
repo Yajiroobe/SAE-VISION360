@@ -1,0 +1,49 @@
+{
+  "obstacles": {
+    "label": "Obstacles urbains",
+    "classes": ["person", "crowd", "stairs", "curb", "door", "cone", "barrier", "puddle"],
+    "synonyms": {
+      "person": ["people", "human", "personne"],
+      "crowd": ["group", "queue"],
+      "stairs": ["stair", "staircase", "escalier"],
+      "curb": ["step", "dénivelé", "trottoir"],
+      "door": ["porte", "entry"],
+      "cone": ["traffic cone", "pylon"],
+      "barrier": ["bollard", "barrière", "work zone"],
+      "puddle": ["water", "spill", "flaque"]
+    }
+  },
+  "retail": {
+    "label": "Supermarché / retail",
+    "classes": ["product", "shelf", "price_tag", "barcode", "cart", "basket", "bottle", "can", "produce", "package"],
+    "synonyms": {
+      "product": ["item", "article"],
+      "shelf": ["rayon", "gondole"],
+      "price_tag": ["étiquette", "price"],
+      "barcode": ["code-barres"],
+      "cart": ["caddie", "trolley"],
+      "basket": ["panier"],
+      "bottle": ["drink", "boisson"],
+      "can": ["boîte", "canette"],
+      "produce": ["fruit", "vegetable"],
+      "package": ["box", "pack"]
+    }
+  },
+  "restaurant": {
+    "label": "Restaurant / cantine",
+    "classes": ["table", "chair", "tray", "cutlery", "plate", "glass", "menu", "counter", "terminal", "dish"],
+    "synonyms": {
+      "table": ["tabletop", "desk"],
+      "chair": ["seat"],
+      "tray": ["plateau"],
+      "cutlery": ["fork", "knife", "spoon", "couteau", "fourchette"],
+      "plate": ["dish", "assiette"],
+      "glass": ["cup", "verre"],
+      "menu": ["card", "carte"],
+      "counter": ["bar", "comptoir"],
+      "terminal": ["payment", "tpv"],
+      "dish": ["meal", "plat"]
+    }
+  }
+}
+
