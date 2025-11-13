@@ -92,13 +92,26 @@ jobs:
                "**/.cache/*"
           ls -lh vision360-backup.zip
 
+      - name: Configure rclone (OAuth user)
+        if: ${{ secrets.RCLONE_GDRIVE_TOKEN != '' }}
+        env:
+          CLIENT_ID: ${{ secrets.RCLONE_GDRIVE_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.RCLONE_GDRIVE_CLIENT_SECRET }}
+          TOKEN: ${{ secrets.RCLONE_GDRIVE_TOKEN }}
+        run: |
+          printf '%s' "$TOKEN" > token.json
+          rclone config create gdrive drive scope=drive client_id="$CLIENT_ID" client_secret="$CLIENT_SECRET" token="$(cat token.json)"
+          rm -f token.json
+
       - name: Write service-account JSON & validate
+        if: ${{ secrets.RCLONE_GDRIVE_TOKEN == '' }}
         run: |
           printf '%s' '${{ secrets.GDRIVE_CREDENTIALS }}' > sa.json
           jq -e . sa.json >/dev/null
           echo "Service account JSON looks valid."
 
       - name: Configure rclone (service account)
+        if: ${{ secrets.RCLONE_GDRIVE_TOKEN == '' }}
         run: |
           rclone config create gdrive drive scope=drive service_account_file=sa.json
 

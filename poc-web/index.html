@@ -40,7 +40,45 @@
     <div id="toolbar">
       <button id="startBtn" class="btn">Start</button>
       <button id="ttsBtn" class="btn" aria-pressed="false">TTS</button>
-      <button id="boxesBtn" class="btn" aria-pressed="true">Show Boxes</button>
+      <button id="boxesBtn" class="btn" aria-pressed="true">Boxes</button>
+      <label>Profile
+        <select id="profileSel" class="btn" style="padding:4px;">
+          <option value="" selected>custom</option>
+        </select>
+      </label>
+      <label style="margin-left:8px;">Res
+        <select id="resSel" class="btn" style="padding:4px;">
+          <option value="320">320</option>
+          <option value="480" selected>480</option>
+          <option value="640">640</option>
+        </select>
+      </label>
+      <label>Stride
+        <select id="strideSel" class="btn" style="padding:4px;">
+          <option value="1" selected>1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+        </select>
+      </label>
+      <label>Conf
+        <input id="thr" type="range" min="0" max="1" step="0.01" value="0.5" />
+      </label>
+      <label>MinArea
+        <input id="minArea" type="range" min="0" max="0.2" step="0.005" value="0.02" />
+      </label>
+      <label>Backend
+        <select id="backendSel" class="btn" style="padding:4px;">
+          <option value="auto" selected>auto</option>
+          <option value="webgpu">webgpu</option>
+          <option value="webgl">webgl</option>
+          <option value="cpu">cpu</option>
+        </select>
+      </label>
+      <input id="classesInput" class="btn" style="padding:4px; width:220px;" placeholder="classes (ex: person,car,truck)" />
+      <button id="recBtn" class="btn" aria-pressed="false">Record</button>
+      <button id="snapBtn" class="btn">Snapshot</button>
+      <button id="sampleBtn" class="btn">Capture Sample</button>
+      <button id="csvBtn" class="btn">Download CSV</button>
       <span id="stats">Idle</span>
     </div>
     <div id="stage">
@@ -58,6 +96,17 @@
       const startBtn = document.getElementById('startBtn');
       const ttsBtn = document.getElementById('ttsBtn');
       const boxesBtn = document.getElementById('boxesBtn');
+      const resSel = document.getElementById('resSel');
+      const strideSel = document.getElementById('strideSel');
+      const thrEl = document.getElementById('thr');
+      const backendSel = document.getElementById('backendSel');
+      const profileSel = document.getElementById('profileSel');
+      const recBtn = document.getElementById('recBtn');
+      const snapBtn = document.getElementById('snapBtn');
+      const csvBtn = document.getElementById('csvBtn');
+      const minAreaEl = document.getElementById('minArea');
+      const classesInput = document.getElementById('classesInput');
+      const sampleBtn = document.getElementById('sampleBtn');
 
       let model = null;
       let running = false;
@@ -65,6 +114,17 @@
       let ttsEnabled = false;
       let lastSpeak = 0;
       const SPEAK_COOLDOWN_MS = 2000;
+      let stride = 1;
+      let frameCount = 0;
+      let confThr = 0.5;
+      let minArea = 0.02; // fraction of frame area
+      let allowedClasses = new Set();
+      let allowedExpanded = new Set();
+      let ontology = {};
+      let synonymsLookup = {};
+      let rec = null; // MediaRecorder
+      let recChunks = [];
+      const metrics = [];
 
       function speak(text) {
         if (!ttsEnabled) return;
@@ -90,10 +150,23 @@
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
         video.srcObject = stream;
         await new Promise(r => video.onloadedmetadata = r);
-        // Reduce input size for latency; canvas will display scaled
-        const W = Math.min(640, video.videoWidth || 640);
+        // Input size for latency; canvas will display scaled
+        const targetLong = parseInt(resSel.value, 10);
+        const W = Math.min(targetLong, video.videoWidth || targetLong);
         const H = Math.round(W * (video.videoHeight || 480) / (video.videoWidth || 640));
         canvas.width = W; canvas.height = H;
+        // Prepare recorder on the canvas
+        const streamOut = canvas.captureStream(30);
+        rec = new MediaRecorder(streamOut, { mimeType: 'video/webm;codecs=vp9' });
+        rec.ondataavailable = e => { if (e.data.size > 0) recChunks.push(e.data); };
+        rec.onstop = () => {
+          const blob = new Blob(recChunks, { type: 'video/webm' });
+          recChunks = [];
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `vision360-${Date.now()}.webm`;
+          a.click(); URL.revokeObjectURL(url);
+        };
       }
 
       async function loadModel() {
@@ -102,16 +175,102 @@
         statsEl.textContent = 'Model loaded';
       }
 
+      async function loadOntology() {
+        try {
+          const data = await fetch('ontology.json').then(r => r.json());
+          ontology = data;
+          synonymsLookup = {};
+          Object.values(data).forEach(group => {
+            Object.entries(group.synonyms || {}).forEach(([canon, syns]) => {
+              synonymsLookup[canon.toLowerCase()] = syns.map(s => s.toLowerCase());
+            });
+          });
+          Object.entries(data).forEach(([key, group]) => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = group.label || key;
+            profileSel.appendChild(opt);
+          });
+        } catch (e) {
+          console.warn('Failed to load ontology', e);
+        }
+      }
+
+      function rebuildAllowedExpanded() {
+        allowedExpanded = new Set();
+        if (allowedClasses.size === 0) return;
+        allowedClasses.forEach(c => {
+          allowedExpanded.add(c);
+          const syns = synonymsLookup[c] || [];
+          syns.forEach(s => allowedExpanded.add(s));
+        });
+      }
+
+      function updateAllowedFromInput(rawValue) {
+        allowedClasses.clear();
+        const raw = rawValue.trim();
+        if (raw.length === 0) {
+          rebuildAllowedExpanded();
+          return;
+        }
+        raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean).forEach(c => allowedClasses.add(c));
+        rebuildAllowedExpanded();
+      }
+
+      function applyProfile(profileKey) {
+        if (!profileKey || !ontology[profileKey]) {
+          return;
+        }
+        const group = ontology[profileKey];
+        const classes = group.classes || [];
+        classesInput.value = classes.join(',');
+        updateAllowedFromInput(classesInput.value);
+      }
+
+      async function pickBackend() {
+        const choice = backendSel.value;
+        try {
+          if (choice === 'auto') {
+            if (tf.backend().registryFactory && tf.backend().registryFactory.webgpu) {
+              await tf.setBackend('webgpu');
+            } else if (tf.backend().registryFactory && tf.backend().registryFactory.webgl) {
+              await tf.setBackend('webgl');
+            }
+          } else {
+            await tf.setBackend(choice);
+          }
+          await tf.ready();
+        } catch (e) {
+          console.warn('Backend select failed, falling back:', e);
+        }
+        statsEl.textContent = `Backend: ${tf.getBackend()}`;
+      }
+
       async function loop() {
         if (!running) return;
         const t0 = performance.now();
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const preds = await model.detect(canvas, 20);
+        let preds;
+        if (frameCount % stride === 0) {
+          preds = await model.detect(canvas, 20);
+          window.__lastPreds = preds; // cache
+        } else {
+          preds = window.__lastPreds || [];
+        }
         const t1 = performance.now();
+
+        // Filters: confidence, area, class
+        const filtered = preds.filter(p => {
+          if (p.score < confThr) return false;
+          const areaFrac = (p.bbox[2] * p.bbox[3]) / (canvas.width * canvas.height);
+          if (areaFrac < minArea) return false;
+          if (allowedExpanded.size > 0 && !allowedExpanded.has(String(p.class).toLowerCase())) return false;
+          return true;
+        });
 
         let msgs = [];
         if (showBoxes) {
-          for (const p of preds) {
+          for (const p of filtered) {
             const [x, y, w, h] = p.bbox;
             const { side, zone } = sideAndZone(p.bbox, canvas.width, canvas.height);
             ctx.strokeStyle = 'rgba(0, 200, 255, 0.9)';
@@ -127,17 +286,19 @@
 
         const dt = (t1 - t0).toFixed(1);
         const fps = (1000 / (t1 - t0)).toFixed(1);
-        statsEl.textContent = `FPS ~${fps} | ${dt} ms | ${preds.length} objs`;
+        statsEl.textContent = `FPS ~${fps} | ${dt} ms | ${filtered.length} objs | ${tf.getBackend()}`;
         labelsEl.textContent = msgs.join(' · ');
+        metrics.push({ ts: Date.now(), fps, dt, objs: filtered.length });
 
         // Simple alerting: prioritize nearer objects
-        const near = preds
+        const near = filtered
           .map(p => ({ p, ...sideAndZone(p.bbox, canvas.width, canvas.height) }))
           .sort((a, b) => (a.zone === 'near' ? -1 : 1));
         if (near[0]) {
           speak(`Attention ${near[0].p.class} ${near[0].side}`);
         }
 
+        frameCount++;
         requestAnimationFrame(loop);
       }
 
@@ -145,6 +306,7 @@
         if (!running) {
           try {
             await window.__vendorsReady; // ensure libs loaded
+            await pickBackend();
             await setupCamera();
             if (!model) await loadModel();
             running = true;
@@ -170,6 +332,99 @@
       boxesBtn.addEventListener('click', () => {
         showBoxes = !showBoxes;
         boxesBtn.setAttribute('aria-pressed', String(showBoxes));
+      });
+
+      backendSel.addEventListener('change', async () => {
+        await pickBackend();
+      });
+      resSel.addEventListener('change', async () => {
+        if (running) {
+          // restart camera with new resolution target
+          const stream = video.srcObject; if (stream) stream.getTracks().forEach(t => t.stop());
+          await setupCamera();
+        }
+      });
+      strideSel.addEventListener('change', () => {
+        stride = parseInt(strideSel.value, 10);
+      });
+      thrEl.addEventListener('input', () => {
+        confThr = parseFloat(thrEl.value);
+      });
+      minAreaEl.addEventListener('input', () => {
+        minArea = parseFloat(minAreaEl.value);
+      });
+      classesInput.addEventListener('change', () => {
+        updateAllowedFromInput(classesInput.value);
+        profileSel.value = '';
+      });
+      profileSel.addEventListener('change', () => {
+        if (profileSel.value) {
+          applyProfile(profileSel.value);
+        } else {
+          updateAllowedFromInput(classesInput.value);
+        }
+      });
+      recBtn.addEventListener('click', () => {
+        const on = recBtn.getAttribute('aria-pressed') === 'true';
+        const next = !on; recBtn.setAttribute('aria-pressed', String(next));
+        if (next) rec.start(500); else rec.stop();
+      });
+      snapBtn.addEventListener('click', () => {
+        const url = canvas.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = url; a.download = `snapshot-${Date.now()}.png`; a.click();
+      });
+      sampleBtn.addEventListener('click', async () => {
+        // Build annotation JSON for the current frame with filtered preds
+        const W = canvas.width, H = canvas.height;
+        const preds = (window.__lastPreds || []).filter(p => {
+          if (p.score < confThr) return false;
+          const areaFrac = (p.bbox[2] * p.bbox[3]) / (W * H);
+          if (areaFrac < minArea) return false;
+          if (allowedExpanded.size > 0 && !allowedExpanded.has(String(p.class).toLowerCase())) return false;
+          return true;
+        });
+        const ts = Date.now();
+        const meta = {
+          ts,
+          width: W,
+          height: H,
+          backend: tf.getBackend(),
+          confThr,
+          minArea,
+          stride,
+          allowed: Array.from(allowedClasses),
+          predictions: preds.map(p => ({
+            class: p.class,
+            score: p.score,
+            bbox_px: { x: p.bbox[0], y: p.bbox[1], w: p.bbox[2], h: p.bbox[3] },
+            bbox_norm: { x: p.bbox[0]/W, y: p.bbox[1]/H, w: p.bbox[2]/W, h: p.bbox[3]/H }
+          }))
+        };
+        // Download JSON
+        const jblob = new Blob([JSON.stringify(meta, null, 2)], { type: 'application/json' });
+        let a = document.createElement('a');
+        a.href = URL.createObjectURL(jblob); a.download = `sample-${ts}.json`; a.click();
+        URL.revokeObjectURL(a.href);
+        // Download PNG
+        canvas.toBlob((blob) => {
+          const url = URL.createObjectURL(blob);
+          const a2 = document.createElement('a'); a2.href = url; a2.download = `sample-${ts}.png`; a2.click();
+          URL.revokeObjectURL(url);
+        }, 'image/png');
+      });
+      csvBtn.addEventListener('click', () => {
+        const header = 'ts,fps,dt_ms,objs\n';
+        const rows = metrics.map(m => `${m.ts},${m.fps},${m.dt},${m.objs}`).join('\n');
+        const blob = new Blob([header + rows + '\n'], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `metrics-${Date.now()}.csv`; a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      // bootstrap
+      loadOntology().finally(() => {
+        updateAllowedFromInput(classesInput.value || '');
       });
     </script>
   </body>

@@ -1,31 +1,39 @@
-# POC Vision – Webcam (PC)
+﻿# POC Vision - Webcam (PC)
 
-Ce POC permet de tester en direct la détection d’obstacles depuis la webcam du PC, sans installer Android. Il utilise TensorFlow.js (modèle COCO‑SSD) et affiche FPS, boîtes, et alertes vocales optionnelles.
+Ce POC permet de tester en direct la detection d'obstacles ou d'objets via la webcam du PC. Il utilise TensorFlow.js (modele COCO-SSD) et affiche FPS, latence et alertes vocales optionnelles.
 
-## Prérequis
-- Un navigateur moderne (Chrome/Edge/Firefox). Chrome recommandé.
-- Accès internet (pour charger TF.js et le modèle). 
+## Prerequis
+- Navigateur moderne (Chrome/Edge/Firefox). Chrome recommande.
+- Internet pour charger TF.js et le modele (ou lancer `fetch_vendor.*` pour les avoir en local).
 
 ## Lancer le POC
-1) Ouvrir un terminal dans `SAE-VISION360/poc-web`
-2) Démarrer un serveur local (HTTPS non requis en local):
-   - Python 3: `python -m http.server 8000`
-3) Ouvrir le navigateur sur: `http://localhost:8000/`
-4) Autoriser l’accès à la caméra quand le navigateur le demande.
+1. Dans `SAE-VISION360/poc-web`
+2. `python -m http.server 8000`
+3. Ouvrir `http://localhost:8000/`
+4. Autoriser la camera.
 
 ## Utilisation
-- Boutons en haut à gauche:
-  - Start/Stop: démarrer/arrêter l’inférence
-  - TTS: activer/désactiver les alertes vocales (Web Speech API)
-  - Show Boxes: afficher/masquer les boîtes
-- Affichages: FPS, classes détectées, zone (near/mid/far), côté (left/center/right)
-- Optimisation: la résolution d’entrée est réduite pour améliorer la latence. 
+- Contrôles:
+  - `Start`/`Stop`: demarrer/arreter
+  - `TTS`: activer la voix
+  - `Boxes`: afficher/masquer les boites
+  - `Profile`: applique un mapping (obstacles, retail, restaurant) issu de `ontology.json` et remplit `classes`
+  - `Res`: resolution d'entree (320/480/640)
+  - `Stride`: n'inferer qu'une frame sur N
+  - `Conf`: seuil confiance
+  - `MinArea`: aire minimale (fraction de l'image)
+  - `Backend`: auto/webgpu/webgl/cpu
+  - `classes`: filtre manuel complementaire (ex: `person,car,truck`). Vide = toutes
+  - `Record`: enregistre une video (.webm)
+  - `Snapshot`: capture PNG
+  - `Capture Sample`: telecharge PNG + JSON des detections (dataset)
+  - `Download CSV`: export metrics (timestamp, FPS, latence, nb objets)
+- Bandeau: affiche FPS, latence et backend actif.
 
 ## Limites
-- Modèle générique (COCO) ≠ liste exacte d’obstacles du projet (utilisé ici pour latence et boucle E2E). 
-- Phrases TTS simples pour démo. La logique finale sera affinée.
+- COCO-SSD reste generique; modele custom (YOLOv8n/MediaPipe) viendra ensuite.
+- Phrases TTS et consignes simplifiees.
 
-## Étapes suivantes
-- Remplacer par un modèle léger custom (YOLOv8n/MediaPipe) une fois prêt.
-- Ajouter estimation de distance plus robuste (stéréo/AR depth sur mobile).
-
+## Suite possible
+- Remplacer par un modele on-device custom.
+- Ajouter profondeur (ARCore/Depth API) et OCR/barcode pour retail/restaurant.
