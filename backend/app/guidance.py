@@ -21,10 +21,18 @@ class EnrichRequest(BaseModel):
     profile_hint: Optional[str] = None
 
 
+class EnrichBatchRequest(BaseModel):
+    detections: List[Detection]
+    profile_hint: Optional[str] = None
+
+
 class EnrichResponse(BaseModel):
     summary: str
     attributes: Dict[str, str] = {}
     risks: List[str] = []
+    class_name: Optional[str] = None
+    zone: Optional[str] = None
+    side: Optional[str] = None
 
 
 class AdviceRequest(BaseModel):
@@ -101,13 +109,19 @@ def describe_detection(det: Detection) -> EnrichResponse:
     if det.context:
         attrs["context"] = det.context
 
-    return EnrichResponse(summary=summary, attributes=attrs, risks=risks)
+    return EnrichResponse(summary=summary, attributes=attrs, risks=risks, class_name=det.class_name, zone=det.zone, side=det.side)
 
 
 @router.post("/enrich", response_model=EnrichResponse)
 def enrich_detection(payload: EnrichRequest) -> EnrichResponse:
     """Stub d'enrichissement: décrit l'objet et ajoute des risques simples."""
     return describe_detection(payload.detection)
+
+
+@router.post("/enrich/batch", response_model=List[EnrichResponse])
+def enrich_batch(payload: EnrichBatchRequest) -> List[EnrichResponse]:
+    """Retourne les enrichissements pour chaque détection."""
+    return [describe_detection(det) for det in payload.detections]
 
 
 @router.post("/advise", response_model=AdviceResponse)
@@ -134,4 +148,3 @@ def advise(payload: AdviceRequest) -> AdviceResponse:
         channels.append("haptic")
 
     return AdviceResponse(priority=priority, channel=channels, messages=messages)
-
