@@ -17,18 +17,21 @@ Ce POC permet de tester en direct la detection d'obstacles ou d'objets via la we
   - `Start`/`Stop`: demarrer/arreter
   - `TTS`: activer la voix
   - `Boxes`: afficher/masquer les boites
-  - `Profile`: applique un mapping (obstacles, retail, restaurant) issu de `ontology.json` et remplit `classes`
+  - `Profile`: applique un mapping (général, obstacles, retail, restaurant) issu de `ontology.json` et remplit `classes`
   - `Res`: resolution d'entree (320/480/640)
   - `Stride`: n'inferer qu'une frame sur N
   - `Conf`: seuil confiance
   - `MinArea`: aire minimale (fraction de l'image)
   - `Backend`: auto/webgpu/webgl/cpu
   - `classes`: filtre manuel complementaire (ex: `person,car,truck`). Vide = toutes
+  - `API`: base URL du backend (ex: `http://localhost:8000/api`)
   - `Record`: enregistre une video (.webm)
   - `Snapshot`: capture PNG
   - `Capture Sample`: telecharge PNG + JSON des detections (dataset)
+  - `Describe`: appelle `/api/guidance/enrich/batch` et affiche les descriptions/risques
+  - `Guidance`: enchaîne `/api/guidance/enrich/batch` puis `/api/guidance/advise` pour générer les consignes vocales/haptiques
   - `Download CSV`: export metrics (timestamp, FPS, latence, nb objets)
-- Bandeau: affiche FPS, latence et backend actif.
+- Bandeau: affiche FPS, latence et backend actif. Panneau “Guidance” (en bas à droite) montre le résultat du backend.
 
 ## Limites
 - COCO-SSD reste generique; modele custom (YOLOv8n/MediaPipe) viendra ensuite.

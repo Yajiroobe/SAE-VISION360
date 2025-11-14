@@ -44,6 +44,40 @@
       "terminal": ["payment", "tpv"],
       "dish": ["meal", "plat"]
     }
+  },
+  "general": {
+    "label": "Général (COCO étendu)",
+    "classes": [
+      "person", "cell phone", "handbag", "backpack", "suitcase", "laptop", "keyboard", "mouse",
+      "remote", "tv", "book", "chair", "couch", "table", "bed", "bench", "bottle", "cup",
+      "bowl", "umbrella", "tie", "skateboard", "sports ball", "clock", "potted plant",
+      "frisbee", "scissors", "toothbrush", "hair drier"
+    ],
+    "synonyms": {
+      "cell phone": ["phone", "telephone", "smartphone", "portable"],
+      "handbag": ["sac", "bag"],
+      "backpack": ["sac a dos", "sac à dos"],
+      "suitcase": ["valise"],
+      "laptop": ["ordinateur", "pc"],
+      "keyboard": ["clavier"],
+      "mouse": ["souris"],
+      "remote": ["telecommande", "telecommande"],
+      "book": ["livre"],
+      "chair": ["seat", "chaise"],
+      "table": ["tabletop", "desk"],
+      "bench": ["banc"],
+      "bottle": ["bouteille"],
+      "cup": ["verre", "mug"],
+      "bowl": ["bol"],
+      "umbrella": ["parapluie"],
+      "tie": ["cravate"],
+      "skateboard": ["skate"],
+      "sports ball": ["ballon"],
+      "clock": ["horloge"],
+      "potted plant": ["plante"],
+      "scissors": ["ciseaux"],
+      "toothbrush": ["brosse a dents"],
+      "hair drier": ["seche cheveux", "sèche cheveux"]
+    }
   }
 }
-

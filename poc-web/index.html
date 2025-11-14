@@ -75,9 +75,12 @@
         </select>
       </label>
       <input id="classesInput" class="btn" style="padding:4px; width:220px;" placeholder="classes (ex: person,car,truck)" />
+      <input id="apiBase" class="btn" style="padding:4px; width:200px;" value="http://localhost:8000/api" />
       <button id="recBtn" class="btn" aria-pressed="false">Record</button>
       <button id="snapBtn" class="btn">Snapshot</button>
       <button id="sampleBtn" class="btn">Capture Sample</button>
+      <button id="describeBtn" class="btn">Describe</button>
+      <button id="adviseBtn" class="btn">Guidance</button>
       <button id="csvBtn" class="btn">Download CSV</button>
       <span id="stats">Idle</span>
     </div>
@@ -86,6 +89,7 @@
       <canvas id="canvas"></canvas>
     </div>
     <div id="labels"></div>
+    <div id="guidance" style="position:fixed; bottom:40px; right:10px; max-width:30vw; color:#9fd;">Guidance: idle</div>
 
     <script>
       const video = document.getElementById('video');
@@ -107,6 +111,10 @@
       const minAreaEl = document.getElementById('minArea');
       const classesInput = document.getElementById('classesInput');
       const sampleBtn = document.getElementById('sampleBtn');
+      const apiBaseInput = document.getElementById('apiBase');
+      const describeBtn = document.getElementById('describeBtn');
+      const adviseBtn = document.getElementById('adviseBtn');
+      const guidanceEl = document.getElementById('guidance');
 
       let model = null;
       let running = false;
@@ -122,6 +130,7 @@
       let allowedExpanded = new Set();
       let ontology = {};
       let synonymsLookup = {};
+      let lastEnriched = [];
       let rec = null; // MediaRecorder
       let recChunks = [];
       const metrics = [];
@@ -191,8 +200,15 @@
             opt.textContent = group.label || key;
             profileSel.appendChild(opt);
           });
+          if (data.general) {
+            profileSel.value = 'general';
+            applyProfile('general');
+          } else {
+            updateAllowedFromInput(classesInput.value || '');
+          }
         } catch (e) {
           console.warn('Failed to load ontology', e);
+          updateAllowedFromInput(classesInput.value || '');
         }
       }
 
@@ -268,11 +284,19 @@
           return true;
         });
 
+        const enriched = filtered.map(p => {
+          const info = sideAndZone(p.bbox, canvas.width, canvas.height);
+          return { detection: p, side: info.side, zone: info.zone };
+        });
+        lastEnriched = enriched;
+        window.__lastEnriched = enriched;
+
         let msgs = [];
         if (showBoxes) {
-          for (const p of filtered) {
+          for (const item of enriched) {
+            const p = item.detection;
             const [x, y, w, h] = p.bbox;
-            const { side, zone } = sideAndZone(p.bbox, canvas.width, canvas.height);
+            const { side, zone } = item;
             ctx.strokeStyle = 'rgba(0, 200, 255, 0.9)';
             ctx.lineWidth = 2;
             ctx.strokeRect(x, y, w, h);
@@ -286,16 +310,15 @@
 
         const dt = (t1 - t0).toFixed(1);
         const fps = (1000 / (t1 - t0)).toFixed(1);
-        statsEl.textContent = `FPS ~${fps} | ${dt} ms | ${filtered.length} objs | ${tf.getBackend()}`;
+        statsEl.textContent = `FPS ~${fps} | ${dt} ms | ${enriched.length} objs | ${tf.getBackend()}`;
         labelsEl.textContent = msgs.join(' · ');
-        metrics.push({ ts: Date.now(), fps, dt, objs: filtered.length });
+        metrics.push({ ts: Date.now(), fps, dt, objs: enriched.length });
 
         // Simple alerting: prioritize nearer objects
-        const near = filtered
-          .map(p => ({ p, ...sideAndZone(p.bbox, canvas.width, canvas.height) }))
+        const near = enriched
           .sort((a, b) => (a.zone === 'near' ? -1 : 1));
         if (near[0]) {
-          speak(`Attention ${near[0].p.class} ${near[0].side}`);
+          speak(`Attention ${near[0].detection.class} ${near[0].side}`);
         }
 
         frameCount++;
@@ -375,15 +398,12 @@
         a.href = url; a.download = `snapshot-${Date.now()}.png`; a.click();
       });
       sampleBtn.addEventListener('click', async () => {
-        // Build annotation JSON for the current frame with filtered preds
         const W = canvas.width, H = canvas.height;
-        const preds = (window.__lastPreds || []).filter(p => {
-          if (p.score < confThr) return false;
-          const areaFrac = (p.bbox[2] * p.bbox[3]) / (W * H);
-          if (areaFrac < minArea) return false;
-          if (allowedExpanded.size > 0 && !allowedExpanded.has(String(p.class).toLowerCase())) return false;
-          return true;
-        });
+        const enriched = window.__lastEnriched || [];
+        if (!enriched.length) {
+          alert('Aucune détection recente à capturer.');
+          return;
+        }
         const ts = Date.now();
         const meta = {
           ts,
@@ -394,9 +414,11 @@
           minArea,
           stride,
           allowed: Array.from(allowedClasses),
-          predictions: preds.map(p => ({
+          predictions: enriched.map(({ detection: p, side, zone }) => ({
             class: p.class,
             score: p.score,
+            zone,
+            side,
             bbox_px: { x: p.bbox[0], y: p.bbox[1], w: p.bbox[2], h: p.bbox[3] },
             bbox_norm: { x: p.bbox[0]/W, y: p.bbox[1]/H, w: p.bbox[2]/W, h: p.bbox[3]/H }
           }))
@@ -422,10 +444,93 @@
         URL.revokeObjectURL(url);
       });
 
-      // bootstrap
-      loadOntology().finally(() => {
-        updateAllowedFromInput(classesInput.value || '');
+      describeBtn.addEventListener('click', async () => {
+        const enriched = window.__lastEnriched || [];
+        if (!enriched.length) {
+          guidanceEl.textContent = 'Describe: aucune detection';
+          return;
+        }
+        const detectionsPayload = enriched.map(({ detection: p, side, zone }) => ({
+          class: p.class,
+          score: Number(p.score.toFixed(4)),
+          zone,
+          side
+        }));
+        const apiBase = (apiBaseInput.value || 'http://localhost:8000/api').replace(/\/$/, '');
+        guidanceEl.textContent = 'Describe: envoi...';
+        try {
+          const res = await fetch(`${apiBase}/guidance/enrich/batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ detections: detectionsPayload, profile_hint: profileSel.value })
+          });
+          if (!res.ok) {
+            throw new Error(await res.text());
+          }
+          const data = await res.json();
+          const txt = data.map((d, idx) => `[${idx}] ${d.summary}${d.risks?.length ? ' (' + d.risks.join(', ') + ')' : ''}`).join(' | ');
+          guidanceEl.textContent = `Describe: ${txt}`;
+          labelsEl.textContent = txt;
+        } catch (err) {
+          console.error(err);
+          guidanceEl.textContent = `Describe error: ${err.message}`;
+        }
       });
+
+      adviseBtn.addEventListener('click', async () => {
+        const enriched = window.__lastEnriched || [];
+        if (!enriched.length) {
+          guidanceEl.textContent = 'Guidance: aucune détection récente';
+          return;
+        }
+        const detectionsPayload = enriched.map(({ detection: p, side, zone }) => ({
+          class: p.class,
+          score: Number(p.score.toFixed(4)),
+          zone,
+          side
+        }));
+        const apiBase = (apiBaseInput.value || 'http://localhost:8000/api').replace(/\/$/, '');
+        guidanceEl.textContent = 'Guidance: enrich...';
+        try {
+          const enrichRes = await fetch(`${apiBase}/guidance/enrich/batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ detections: detectionsPayload, profile_hint: profileSel.value })
+          });
+          if (!enrichRes.ok) {
+            throw new Error(await enrichRes.text());
+          }
+          const enrichments = await enrichRes.json();
+          const body = {
+            profile: profileSel.value || 'pmr_general',
+            context: 'web_poc',
+            detections: detectionsPayload,
+            enrichments
+          };
+          guidanceEl.textContent = 'Guidance: consignes...';
+          const res = await fetch(`${apiBase}/guidance/advise`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          if (!res.ok) {
+            throw new Error(await res.text());
+          }
+          const data = await res.json();
+          const msg = Array.isArray(data.messages) ? data.messages.join(' | ') : JSON.stringify(data);
+          guidanceEl.textContent = `Guidance (${data.priority}): ${msg}`;
+          if (Array.isArray(enrichments)) {
+            const enrichTxt = enrichments.map(e => `${e.summary}${e.risks?.length ? ' [' + e.risks.join(', ') + ']' : ''}`).join(' • ');
+            labelsEl.textContent = enrichTxt;
+          }
+        } catch (err) {
+          console.error(err);
+          guidanceEl.textContent = `Guidance error: ${err.message}`;
+        }
+      });
+
+      // bootstrap
+      loadOntology();
     </script>
   </body>
   </html>

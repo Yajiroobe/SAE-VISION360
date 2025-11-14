@@ -28,6 +28,28 @@ Response
 }
 ```
 
+## POST /guidance/enrich/batch
+Même logique, mais accepte une liste.
+
+Request
+```json
+{
+  "detections": [
+    {"class": "person", "score": 0.9, "zone": "near", "side": "left"},
+    {"class": "handbag", "score": 0.7, "zone": "mid", "side": "center"}
+  ],
+  "profile_hint": "retail"
+}
+```
+
+Response
+```json
+[
+  {"summary": "Personne à proximité", "attributes": {...}, "risks": ["Obstacle proche"], "class_name": "person"},
+  {"summary": "Article en rayon", "attributes": {...}, "risks": [], "class_name": "handbag"}
+]
+```
+
 ## POST /guidance/advise
 Combine plusieurs détections/enrichissements pour renvoyer des consignes.
 
@@ -51,4 +73,3 @@ Response
 ```
 
 Ces stubs seront remplacés par l'orchestration des LLM (détection → description détaillée → consignes profilées).
-
