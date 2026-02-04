@@ -26,9 +26,7 @@ def _load_env_file():
 # Charger l'environnement AVANT d'importer les routes
 _load_env_file()
 
-from .reservations import router as reservations_router
 from .guidance import router as guidance_router
-from .datasets import router as datasets_router
 from .describe import router as describe_router
 
 app = FastAPI(title="Vision360 API")
@@ -74,7 +72,5 @@ def health():
     return {"status": "ok"}
 
 # Routes
-app.include_router(reservations_router, prefix="/api", tags=["reservations"])
 app.include_router(guidance_router, prefix="/api/guidance", tags=["guidance"])
-app.include_router(datasets_router, prefix="/api/datasets", tags=["datasets"])
 app.include_router(describe_router, prefix="/api", tags=["describe"])
