@@ -1,0 +1,34 @@
+# =============================================================================
+# Backend Vision360 - Dépendances Python
+# =============================================================================
+# Installation : pip install -r requirements.txt
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Framework Web
+# -----------------------------------------------------------------------------
+# FastAPI : Framework web moderne et performant pour APIs REST
+# - Documentation automatique OpenAPI/Swagger
+# - Validation des données avec Pydantic
+# - Support asynchrone natif
+fastapi==0.115.0
+
+# Uvicorn : Serveur ASGI haute performance
+# - [standard] inclut uvloop et httptools pour meilleures performances
+uvicorn[standard]==0.30.6
+
+# -----------------------------------------------------------------------------
+# Client HTTP
+# -----------------------------------------------------------------------------
+# httpx : Client HTTP moderne avec support async
+# - Utilisé pour les appels aux APIs Gemini et Groq
+# - Alternative moderne à requests avec support asyncio
+httpx==0.27.2
+
+# -----------------------------------------------------------------------------
+# Tests
+# -----------------------------------------------------------------------------
+# pytest : Framework de tests unitaires
+# - Utilisé pour les tests du backend
+# - Exécution : pytest tests/ -v
+pytest==8.3.2
